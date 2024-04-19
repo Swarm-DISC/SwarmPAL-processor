@@ -1,0 +1,6 @@
+---
+- name: Setup a development instance of SwarmPAL-processor
+  hosts: swarmpal-dev
+  become: true
+  roles:
+    - swarmpal

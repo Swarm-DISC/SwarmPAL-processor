@@ -1,0 +1,37 @@
+---
+version: '3.4'
+services:
+  swarmpal-processor:
+    image: ghcr.io/dawiedotcom/swarmpal-processor:test
+    networks:
+      - swarmpal-vlan
+    env_file: /home/ubuntu/.env
+    command: /app/start-dashboard.sh
+
+  nginx:
+    image: nginx
+    restart: always
+    depends_on:
+      - swarmpal-processor
+    networks:
+      - swarmpal-vlan
+    ports:
+      - "80:80"
+      - "443:443"
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+      - /var/cache/nginx
+    volumes:
+      - "/home/ubuntu/nginx_conf.d:/etc/nginx/conf.d"
+
+networks:
+  swarmpal-vlan:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1
