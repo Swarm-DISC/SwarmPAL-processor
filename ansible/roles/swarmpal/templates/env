@@ -1,0 +1,4 @@
+VIRES_TOKEN={{ lookup('env', 'VIRES_TOKEN') }}
+FTP_SERVER={{ lookup('env', 'FTP_SERVER') }}
+FTP_USERNAME={{ lookup('env', 'FTP_USERNAME') }}
+FTP_PASSWORD={{ lookup('env', 'FTP_PASSWORD') }}

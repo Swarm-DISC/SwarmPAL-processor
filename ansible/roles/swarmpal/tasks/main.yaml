@@ -1,0 +1,63 @@
+---
+- name: Update and upgrade apt packages
+  become: true
+  apt:
+    upgrade: yes
+    update_cache: yes
+
+- name: Install dependancies
+  apt:
+    name: "{{ item }}"
+  loop:
+    - docker
+    - docker-compose
+
+- name: Update Networking MTU
+  # See: https://www.civo.com/learn/fixing-networking-for-docker
+  lineinfile:
+    path: /lib/systemd/system/docker.service
+    regexp: "^ExecStart=/usr/bin/dockerd"
+    line: "ExecStart=/usr/bin/dockerd --mtu 1450 -H fd:// --containerd=/run/containerd/containerd.sock"
+  when: ansible_distribution == "Ubuntu"
+  notify: Restart Dockerd
+
+- name: Run handlers now, not after all tasks
+  meta: flush_handlers
+
+- name: Create the .env file
+  become: true
+  become_user: ubuntu
+  template:
+    src: env
+    dest: "/home/ubuntu/.env"
+    mode: "600"
+
+- name: "Create directory for nginx config"
+  become: true
+  become_user: ubuntu
+  file:
+    dest: "/home/ubuntu/nginx_conf.d"
+    state: directory
+
+- name: "Copy nginx config"
+  become: true
+  become_user: ubuntu
+  template:
+    src: nginx_default.conf
+    dest: "/home/ubuntu/nginx_conf.d/default.conf"
+
+- name: "Copy docker-compose.yaml"
+  become: true
+  become_user: ubuntu
+  template:
+    src: docker-compose.yaml
+    dest: "/home/ubuntu/docker-compose.yaml"
+
+- name: "docker-compose down"
+  docker_compose:
+    project_src: "/home/ubuntu"
+    state: absent
+
+- name: "docker-compose up"
+  docker_compose:
+    project_src: "/home/ubuntu"

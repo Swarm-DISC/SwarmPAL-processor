@@ -1,0 +1,7 @@
+---
+all:
+  hosts:
+    swarmpal-dev:
+      ansible_host: swarmpal-dev
+      ansible_user: ubuntu
+      ansible_python_interpreter: /usr/bin/python3

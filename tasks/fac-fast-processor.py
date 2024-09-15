@@ -14,14 +14,16 @@
 # ---
 
 # %%
+import argparse
+import asyncio
 import datetime as dt
 import logging
 import os
 import re
 import sched
+import subprocess
 import sys
 import time
-from ftplib import FTP
 
 from dotenv import dotenv_values
 from swarmpal.toolboxes.fac.presets import fac_single_sat
@@ -52,6 +54,10 @@ WAIT_TIME = 900
 # %%
 def get_latest_evaluated(directory) -> "datetime":
     """Scan local directory to identify latest time in files"""
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
     dir_contents = os.listdir(directory)
     product_naming = r"SW_(FAST|OPER)_FAC(A|B|C)TMS_2F_(\d{8}T\d{6})_(\d{8}T\d{6})_.{4}\.(cdf|CDF)"
     matched_files = [s for s in dir_contents if re.search(product_naming, s)]
@@ -67,10 +73,10 @@ def get_latest_evaluated(directory) -> "datetime":
 
 
 # %%
-def job(swarm_spacecraft="A", starting_time=None, output_directory="outputs", remote_directory=None, wait_time=WAIT_TIME):
+def job(swarm_spacecraft="A", starting_time=None, output_directory="outputs", wait_time=WAIT_TIME):
     collection_mag = f"SW_FAST_MAG{swarm_spacecraft}_LR_1B"
     # Check server for latest time in online products
-    LOGGER.info("Checking product availability...")
+    LOGGER.info(f"Checking product availability: {collection_mag}")
     t_latest_on_server = last_available_time(collection_mag).replace(microsecond=0)
     LOGGER.info(f"Latest availability for {collection_mag}: {t_latest_on_server}")
     # Check saved files for latest time evaluated
@@ -91,55 +97,47 @@ def job(swarm_spacecraft="A", starting_time=None, output_directory="outputs", re
         # Prepare the next starting time to be the current end time
         t_latest_evaluated = t_end
         LOGGER.info(f"New data saved: {output_name}. Waiting to check again ({wait_time}s)")
-        # Upload the file to FTP
-        if remote_directory:
-            upload_to_ftp(output_name, remote_directory)
-        LOGGER.info(f"Waiting to check again ({wait_time}s)")
     else:
         LOGGER.info(f"No new data available. Waiting to check again ({wait_time}s)")
 
     # Schedule next job run
-    SCHEDULE.enter(wait_time, 1, job, (swarm_spacecraft, starting_time, output_directory, remote_directory, wait_time))
+    SCHEDULE.enter(wait_time, 1, job, (swarm_spacecraft, starting_time, output_directory, wait_time))
 
 
 # %%
-def get_ftp_server_credentials(env_file="../.env"):
-    env_vars = dotenv_values(env_file)
-    server = env_vars.get("FTP_SERVER")
-    username = env_vars.get("FTP_USERNAME")
-    password = env_vars.get("FTP_PASSWORD")
-    return {"server": server, "username":username, "password":password}
-
-
-def upload_to_ftp(local_file, remote_directory):
-    credentials = get_ftp_server_credentials()
-    try:
-        ftp = FTP(credentials["server"])
-        ftp.login(credentials["username"], credentials["password"])
-        ftp.cwd(remote_directory)
-        with open(local_file, "rb") as file:
-            ftp.storbinary("STOR " + local_file.split('/')[-1], file)
-        LOGGER.info(f"Successfully uploaded: {local_file} to remote: {remote_directory}")
-    except Exception as e:
-        LOGGER.error(f"Failed to upload {local_file} to remote: {remote_directory}\n{e}")
-        raise e
-    finally:
-        ftp.quit()
-
-
-# %%
-def main(spacecraft, output_directory, remote_directory):
-    LOGGER.info(f"Beginning FAC FAST processor for Swarm {spacecraft}")
+def start_job(spacecraft, output_directory):
+    LOGGER.info(f"Beginning FAC FAST processor for Swarm {spacecraft}. Saving results to {output_directory}.")
     # Begin 3 days ago if output_directory is empty
     t0 = dt.datetime.now().date() - dt.timedelta(days=3)
-    SCHEDULE.enter(0, 1, job, (spacecraft, t0, output_directory, remote_directory, WAIT_TIME))
+    SCHEDULE.enter(0, 1, job, (spacecraft, t0, output_directory, WAIT_TIME))
+
+
+# %%
+def main():
+    parser = argparse.ArgumentParser(
+        prog='fac-fast-processor.py',
+        description='...' # TODO
+    )
+    parser.add_argument(
+        '-o', '--output-dir',
+        action='store',
+        default='outputs',
+        help='Location, on local disk, for output files'
+    )
+    parser.add_argument(
+        '-r', '--remote-dir',
+        action='store',
+        default='FAC/TMS',
+        help='Location, on remote server, to sync output files to'
+    )
+    args = parser.parse_args()
+
+    subprocess.Popen(['./inotifywait_rsync.sh', args.output_dir, args.remote_dir])
+
+    for sat in ['A', 'B', 'C']:
+        start_job(sat, os.path.join(args.output_dir, f'Sat_{sat}'))
+
     SCHEDULE.run()
 
-
 if __name__ == "__main__":
-    if "get_ipython" in globals():
-        main(spacecraft="A", output_directory="outputs/Sat_A", remote_directory="FAC/TMS/Sat_A")
-    else:
-        if len(sys.argv) != 4:
-            print("Usage: python fac-fast-processor.py <spacecraft-letter> <output-dir> <remote-directory>")
-        main(sys.argv[1], sys.argv[2], sys.argv[3])
+    main()
