@@ -7,7 +7,7 @@ import swarmpal
 from swarmpal.utils.configs import SPACECRAFT_TO_MAGLR_DATASET
 from yaml import dump
 
-from common import HEADER, JINJA2_ENVIRONMENT
+from common import HEADER, JINJA2_ENVIRONMENT, CustomisedFileDropper
 
 TFA_CODE_TEMPLATE = "tfa.jinja2"
 FAC_SINGLE_SAT_CLI_TEMPLATE = "fac-single-sat-cli.jinja2"
@@ -30,6 +30,7 @@ widgets = {
     ),
     "update-button": pn.widgets.Button(name="Update", button_type="primary"),
     "evaluate-button": pn.widgets.Button(name="Click to evaluate", button_type="primary"),
+    "file-dropper": CustomisedFileDropper(multiple=False),
     # For TFA_Preprocess params
     "preprocess-active-component": pn.widgets.DiscreteSlider(
         name="Active Component", 
@@ -142,16 +143,26 @@ class TFA_GUI:
         self.widgets["update-button"].on_click(self.update_output_pane)
         self.widgets["evaluate-button"].on_click(self.update_data)
         self.data = None
+        self.data_tabs = None
 
     @property
     def sidebar(self):
         '''Panel UI definition for the sidebar.'''
+        self.data_tabs = pn.Tabs(
+            ("VirES (remote", pn.Column(
+                pn.pane.Markdown("Select Duration"),
+                self.widgets["start-end"],
+                pn.pane.Markdown("Select spacecraft"),
+                self.widgets["spacecraft"],
+                )),
+             ("CDF File", pn.Column(
+                 pn.pane.Markdown("Upload CDF file:"),
+                 self.widgets["file-dropper"],
+                 )),
+        )
         return pn.Column(
             pn.pane.Markdown("## Data Parameters"),
-            pn.pane.Markdown("Select Duration"),
-            self.widgets["start-end"],
-            pn.pane.Markdown("Select spacecraft"),
-            self.widgets["spacecraft"],
+            self.data_tabs,
             pn.layout.Divider(),
             pn.pane.Markdown("## Process Parameters"),
             pn.pane.Markdown("### Preprocess"),
@@ -197,10 +208,9 @@ class TFA_GUI:
             return "SW_OPER_MAGC_LR_1B"
         return "SW_OPER_MAGA_LR_1B"
     
-    def make_config(self):
-        '''Create a schema compatible data structure that describes the input dataset and SwarmPAL processes.'''
+    def _make_vires_data_params(self):
         data_product = self._get_data_product(self.widgets['spacecraft'].value)
-        data_params = [dict(
+        return [dict(
             provider="vires",
             collection=data_product,
             measurements=["B_NEC"],
@@ -211,6 +221,28 @@ class TFA_GUI:
             pad_times=["03:00:00", "03:00:00"],
             server_url="https://vires.services/ows",
         )]
+
+    def _make_cdf_data_params(self):
+        filename = self.widgets["file-dropper"].file_in_mem.name
+        return [dict(
+            provider="file",
+            filename=filename,
+            filetype="cdf",
+        )]
+
+    def _using_cdf_input(self):
+        return self.data_tabs.active == 1
+
+    def _make_data_params(self):
+
+        if self._using_cdf_input():
+            return self._make_cdf_data_params()
+        return self._make_vires_data_params()
+
+    def make_config(self):
+        '''Create a schema compatible data structure that describes the input dataset and SwarmPAL processes.'''
+        data_product = self._get_data_product(self.widgets['spacecraft'].value)
+        data_params = self._make_data_params()
         process_params = [
             dict(
                 process_name="TFA_Preprocess",
@@ -244,6 +276,10 @@ class TFA_GUI:
 
     def update_data(self, event):
         '''Downloads input data, applies processes and updates the main pane'''
+
+        if self._using_cdf_input() and not self.widgets["file-dropper"].value:
+            return
+
         config = self.make_config()
         self.data = swarmpal.fetch_data(config)
         swarmpal.apply_processes(self.data, config['process_params'])
@@ -251,6 +287,10 @@ class TFA_GUI:
 
     def update_output_pane(self, event, title="# SwarmPAL TFA Quicklook"):
         '''Update the mane pane'''
+
+        if self._using_cdf_input() and not self.widgets["file-dropper"].value:
+            return
+
         self.output_title.object = title
 
         self.code_snippet.object = self.get_code()
