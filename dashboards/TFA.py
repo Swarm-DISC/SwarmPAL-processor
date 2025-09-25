@@ -9,7 +9,8 @@ from yaml import dump
 
 from common import HEADER, JINJA2_ENVIRONMENT, CustomisedFileDropper
 
-TFA_CODE_TEMPLATE = "tfa.jinja2"
+TFA_VIRES_CODE_TEMPLATE = "tfa_vires.jinja2"
+TFA_CDF_CODE_TEMPLATE = "tfa_cdf.jinja2"
 FAC_SINGLE_SAT_CLI_TEMPLATE = "fac-single-sat-cli.jinja2"
 
 # TODO: Some of the date picker functionality is copied from the FAC dashboard and can be moved to common.py
@@ -288,13 +289,19 @@ class TFA_GUI:
     def update_output_pane(self, event, title="# SwarmPAL TFA Quicklook"):
         '''Update the mane pane'''
 
-        if self._using_cdf_input() and not self.widgets["file-dropper"].value:
-            return
-
         self.output_title.object = title
 
-        self.code_snippet.object = self.get_code()
-        self.cli_command.object = self.get_cli()
+        if self._using_cdf_input() and not self.widgets["file-dropper"].value:
+            # TODO: ask user for a file
+            return
+
+        # TODO: generate CDF code
+        if self._using_cdf_input():
+            self.code_snippet.object = self.get_cdf_code()
+            self.cli_command.object = None
+        else:
+            self.code_snippet.object = self.get_vires_code()
+            self.cli_command.object = self.get_cli()
 
         if not self.data:
             return
@@ -326,7 +333,7 @@ class TFA_GUI:
         ax.text(0.5, 0.5, "No data available / error in figure creation", ha="center", va="center", fontsize=20)
         return fig
 
-    def get_code(self):
+    def get_vires_code(self):
         '''Updates the Python code snippet'''
         config = self.make_config()
         #config_code = pprint.pformat(config, sort_dicts=False)
@@ -334,9 +341,12 @@ class TFA_GUI:
         context = dict(
             config=config_code,
         )
-        template = JINJA2_ENVIRONMENT.get_template(TFA_CODE_TEMPLATE)
+        template = JINJA2_ENVIRONMENT.get_template(TFA_VIRES_CODE_TEMPLATE)
         return f"```python\n{template.render(context)}\n```"
         #return f"```python\nprint('hello world')\n```"
+
+    def get_cdf_code(self):
+        pass
 
     def get_cli(self):
         '''Updates the CLI example snippet'''

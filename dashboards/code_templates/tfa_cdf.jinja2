@@ -1,0 +1,14 @@
+import swarmpal
+from swarmpal.io import create_paldata, PalDataItem
+
+data = create_paldata(
+    **{
+        "": PalDataItem.from_file(
+            filename="{{ filename }}",
+            filetype="{{ filetype }}",
+        ),
+    }
+)
+process_params = {{ process_params }}
+
+swarmpal.apply_processes(data, process_params)
