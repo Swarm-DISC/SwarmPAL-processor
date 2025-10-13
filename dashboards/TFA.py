@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import panel as pn
 import pprint
 from bokeh.models.formatters import PrintfTickFormatter
+from pathlib import Path
+import re
 import swarmpal
 from swarmpal.utils.configs import SPACECRAFT_TO_MAGLR_DATASET
 from yaml import dump
@@ -199,8 +201,15 @@ class TFA_GUI:
             ),
         )
 
-    def _get_data_product(self, spacecraft):
-        '''Translates the spacecraft radio group to a Swarm data product.'''
+    def _get_data_product(self):
+        '''Translates file input or the spacecraft radio group to a Swarm data product.'''
+        if self._using_cdf_input():
+            filename = self.widgets["file-dropper"].file_in_mem.name
+            product_name_full = Path(filename).stem
+            # Truncate to remove data and version
+            return re.sub(r"_\d{8}T\d{6}.*$", "", product_name_full)
+
+        spacecraft = self.widgets['spacecraft'].value
         if spacecraft == 'Swarm-A':
             return "SW_OPER_MAGA_LR_1B"
         if spacecraft == 'Swarm-B':
@@ -210,7 +219,7 @@ class TFA_GUI:
         return "SW_OPER_MAGA_LR_1B"
     
     def _make_vires_data_params(self):
-        data_product = self._get_data_product(self.widgets['spacecraft'].value)
+        data_product = self._get_data_product()
         return [dict(
             provider="vires",
             collection=data_product,
@@ -223,12 +232,16 @@ class TFA_GUI:
             server_url="https://vires.services/ows",
         )]
 
+
     def _make_cdf_data_params(self):
-        filename = self.widgets["file-dropper"].file_in_mem.name
+        filename = self.widgets["file-dropper"].temp_file.name
+        product_name = self._get_data_product()
+
         return [dict(
             provider="file",
             filename=filename,
             filetype="cdf",
+            dataset=product_name
         )]
 
     def _using_cdf_input(self):
@@ -242,16 +255,16 @@ class TFA_GUI:
 
     def make_config(self):
         '''Create a schema compatible data structure that describes the input dataset and SwarmPAL processes.'''
-        data_product = self._get_data_product(self.widgets['spacecraft'].value)
+        data_product = self._get_data_product()
         data_params = self._make_data_params()
         process_params = [
             dict(
                 process_name="TFA_Preprocess",
                 dataset=data_product,
-                active_variable="B_NEC_res_Model",
+                active_variable="B_NEC",
                 active_component=self.widgets['preprocess-active-component'].value,
                 sampling_rate=self.widgets['preprocess-sampling-rate'].value,
-                remove_model=True,
+                remove_model=False,
             ),
             dict(
                 process_name="TFA_Clean",
@@ -295,19 +308,20 @@ class TFA_GUI:
             # TODO: ask user for a file
             return
 
-        # TODO: generate CDF code
-        if self._using_cdf_input():
-            self.code_snippet.object = self.get_cdf_code()
-            self.cli_command.object = None
-        else:
-            self.code_snippet.object = self.get_vires_code()
-            self.cli_command.object = self.get_cli()
+        # Update code and CLI snippets
+        self.code_snippet.object = self.get_vires_code()
+        self.cli_command.object = self.get_cli()
 
         if not self.data:
             return
 
+        # Update the data view
         self.data_view.object = self.data._repr_html_()
-        #fig, _ = self.data.swarmpal_
+
+        if self._using_cdf_input(): # TypeError: No numeric data to plot. when working on CDF files
+            return
+
+        # Plot the results
         fig, _ = swarmpal.toolboxes.tfa.plotting.quicklook(
             self.data,
             tlims=(
@@ -316,15 +330,7 @@ class TFA_GUI:
             ),
             extra_x=('QDLat', 'MLT', 'Latitude'),
         )
-        #try:
-        #except Exception as ex:
-        #    print(ex)
-
-        #    fig = self._empty_matplotlib_figure()
         self.swarmpal_quicklook.object = fig
-
-
-
 
     @staticmethod
     def _empty_matplotlib_figure():
@@ -333,11 +339,23 @@ class TFA_GUI:
         ax.text(0.5, 0.5, "No data available / error in figure creation", ha="center", va="center", fontsize=20)
         return fig
 
+    def replace_file_paths(self, s):
+        '''Replace tmp file locations with in memory file locations in a string s'''
+        if not self._using_cdf_input():
+            return s
+        tmp_filename = self.widgets["file-dropper"].temp_file.name
+        user_filename = self.widgets["file-dropper"].file_in_mem.name
+        return s.replace(tmp_filename, user_filename)
+
     def get_vires_code(self):
         '''Updates the Python code snippet'''
         config = self.make_config()
         #config_code = pprint.pformat(config, sort_dicts=False)
         config_code = pprinter(config) #, sort_dicts=False)
+
+        # Replace tmp (used for running on server) filename with file_in_mem (what the user will use) name
+        config_code = self.replace_file_paths(config_code)
+
         context = dict(
             config=config_code,
         )
@@ -352,6 +370,10 @@ class TFA_GUI:
         '''Updates the CLI example snippet'''
         config = self.make_config()
         config_yaml = dump(config, sort_keys=False)
+
+        # Replace tmp (used for running on server) filename with file_in_mem (what the user will use) name
+        config_yaml = self.replace_file_paths(config_yaml)
+
         context = dict(
             config=config_yaml,
         )
