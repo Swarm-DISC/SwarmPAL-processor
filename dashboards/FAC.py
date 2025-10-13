@@ -333,12 +333,26 @@ class FacDataExplorer:
         """
         Get the YAML configuration and CLI command to download and process the data for the current plot.
         """
-        data_params = {'provider': 'vires', **self.data_params}
-        data_params.pop('options')
-        process_params = {'process_name': 'FAC_single_sat', **self.process_params}
+        process_params = []
+        if self.mode == 'vires':
+            data_params = {'provider': 'vires', **self.data_params}
+            data_params.pop('options')
+
+        elif self.mode == 'local':
+            dataset = self.process_params['dataset']
+            data_params = {'provider': 'file', 'dataset': dataset, **self.data_params}
+            process_params.append(dict(
+                process_name="EXP_LocalForwardMagneticModel",
+                dataset=dataset,
+                model_descriptor="CHAOS-Core",
+            ))
+
+        process_params.append({'process_name': 'FAC_single_sat', **self.process_params})
+
+
         config = dict(
             data_params=[data_params],
-            process_params=[process_params],
+            process_params=process_params,
         )
         config_yaml = dump(config, sort_keys=False)
         context = dict(
