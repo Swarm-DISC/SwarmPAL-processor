@@ -1,0 +1,6 @@
+import swarmpal
+
+config = {{ config }}
+
+data = swarmpal.fetch_data(config)
+swarmpal.apply_processes(data, config['process_params'])

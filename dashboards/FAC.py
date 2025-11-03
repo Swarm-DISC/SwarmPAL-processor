@@ -10,6 +10,7 @@ from tempfile import NamedTemporaryFile
 import shutil
 import os
 from pathlib import Path
+from yaml import dump
 
 from swarmpal.io import PalDataItem, create_paldata
 from swarmpal.experimental import LocalForwardMagneticModel
@@ -22,6 +23,7 @@ pn.extension('filedropper')
 xr.set_options(display_expand_groups=True, display_expand_attrs=True, display_expand_data_vars=True, display_expand_coords=True)
 
 FAC_SINGLE_SAT_CODE_TEMPLATE = "fac-single-sat.jinja2"
+FAC_SINGLE_SAT_CLI_TEMPLATE = "fac-single-sat-cli.jinja2"
 
 start_of_today = dt.datetime.now().date()
 end_of_today = start_of_today + dt.timedelta(days=1)
@@ -48,6 +50,7 @@ class FacDataExplorer:
         self.interactive_output = pn.pane.HoloViews()
         self.swarmpal_quicklook = pn.pane.Matplotlib()
         self.code_snippet = pn.pane.Markdown(styles={"font-size": "15px",})
+        self.cli_command = pn.pane.Markdown(styles={"font-size": "15px",})
         self.output_title = pn.pane.Markdown(styles={"font-size": "20px",})
         self.data_view = pn.pane.HTML()
         self.output_pane = pn.Column(
@@ -60,6 +63,7 @@ class FacDataExplorer:
                 ("Interactive view", self.interactive_output),
                 ("Data view", self.data_view),
                 ("SwarmPAL Python Code", self.code_snippet),
+                ("SwarmPAL CLI Command", self.cli_command),
             ),
         )
         self.widgets["evaluate-button"].on_click(self.update_data)
@@ -261,6 +265,8 @@ class FacDataExplorer:
             self.swarmpal_quicklook.object = fig
         # Code snippet
         self.code_snippet.object = f"```python\n{self.get_code()}\n```"
+        # CLI example
+        self.cli_command.object = self.get_cli()
         # Data view
         self.data_view.object = self.data._repr_html_()
 
@@ -323,6 +329,37 @@ class FacDataExplorer:
         template = JINJA2_ENVIRONMENT.get_template(FAC_SINGLE_SAT_CODE_TEMPLATE)
         return template.render(context)
 
+    def get_cli(self):
+        """
+        Get the YAML configuration and CLI command to download and process the data for the current plot.
+        """
+        process_params = []
+        if self.mode == 'vires':
+            data_params = {'provider': 'vires', **self.data_params}
+            data_params.pop('options')
+
+        elif self.mode == 'local':
+            dataset = self.process_params['dataset']
+            data_params = {'provider': 'file', 'dataset': dataset, **self.data_params}
+            process_params.append(dict(
+                process_name="EXP_LocalForwardMagneticModel",
+                dataset=dataset,
+                model_descriptor="CHAOS-Core",
+            ))
+
+        process_params.append({'process_name': 'FAC_single_sat', **self.process_params})
+
+
+        config = dict(
+            data_params=[data_params],
+            process_params=process_params,
+        )
+        config_yaml = dump(config, sort_keys=False)
+        context = dict(
+            config=config_yaml,
+        )
+        template = JINJA2_ENVIRONMENT.get_template(FAC_SINGLE_SAT_CLI_TEMPLATE)
+        return template.render(context)
 
 data_explorer = FacDataExplorer(widgets)
 
