@@ -26,13 +26,15 @@ widgets = {
     # For dataset params
     "spacecraft": pn.widgets.RadioBoxGroup(options=['Swarm-A', 'Swarm-B', 'Swarm-C'], value='Swarm-A'),
     "start-end": pn.widgets.DatetimeRangePicker(
-        start=dt.date(2000, 1, 1),
-        end=end_of_today,
-        value=(start_of_today - dt.timedelta(days=4), start_of_today - dt.timedelta(days=3)),
-        enable_time=False,
+        name="Select time range",
+        start=dt.datetime(2000, 1, 1, 0, 0),
+        end=dt.datetime.combine(end_of_today, dt.time(23, 59)),
+        value=(dt.datetime(2026, 1, 1, 0, 0), dt.datetime(2026, 1, 2, 0, 0)),
+        enable_time=True,
+        enable_seconds=False,
     ),
-    "update-button": pn.widgets.Button(name="Update", button_type="primary"),
-    "evaluate-button": pn.widgets.Button(name="Click to evaluate", button_type="primary"),
+    "button-fetch-data": pn.widgets.Button(name="Fetch inputs", button_type="primary"),
+    "button-run-analysis": pn.widgets.Button(name="Run analysis", button_type="primary"),
     "file-dropper": CustomisedFileDropper(multiple=False),
     # For TFA_Preprocess params
     "preprocess-active-component": pn.widgets.DiscreteSlider(
@@ -45,6 +47,8 @@ widgets = {
         format=PrintfTickFormatter(format='%.0f Hz'), 
         value=1.0,
         step=1.0,
+        start=0.1,
+        end=10.0,
     ),
     # For TFA_Clean params
     "clean-window-size": pn.widgets.EditableIntSlider(
@@ -138,22 +142,103 @@ class TFA_GUI:
         self.widgets = widgets
 
         self.output_title = pn.pane.Markdown()
-        self.swarmpal_quicklook = pn.pane.Matplotlib()
+        self.swarmpal_quicklook = pn.pane.Matplotlib(max_width=1000, sizing_mode='scale_width', align='center', margin=(10, 5))
         self.data_view = pn.pane.HTML()
         self.code_snippet = pn.pane.Markdown(styles={"font-size": "15px",})
         self.cli_command = pn.pane.Markdown(styles={"font-size": "15px",})
+        self.log_messages = pn.pane.HTML(
+            "",
+            styles={
+                'font-family': 'monospace',
+                'font-size': '12px',
+                'max-height': '400px',
+                'overflow-y': 'auto',
+                'background': '#f5f5f5',
+                'padding': '10px',
+                'min-width': '600px'
+            }
+        )
+        
+        # Create log modal and button
+        self.log_modal = pn.Column(
+            self.log_messages,
+            styles={'min-height': '300px'}
+        )
+        self.log_button = pn.widgets.Button(
+            name="📋 View Logs",
+            button_type="light",
+            width=140,
+            margin=(5, 10)
+        )
+        self._is_loading = False
 
-        self.widgets["update-button"].on_click(self.update_output_pane)
-        self.widgets["evaluate-button"].on_click(self.update_data)
+        self.widgets["button-fetch-data"].on_click(self.update_input_data)
+        self.widgets["button-run-analysis"].on_click(self.update_analysis)
+        
+        # Watch process parameter widgets to auto-run analysis when changed
+        self.widgets["preprocess-active-component"].param.watch(self.update_analysis, 'value')
+        self.widgets["preprocess-sampling-rate"].param.watch(self.update_analysis, 'value')
+        self.widgets["clean-method"].param.watch(self.update_analysis, 'value')
+        self.widgets["clean-window-size"].param.watch(self.update_analysis, 'value')
+        self.widgets["clean-multiplier"].param.watch(self.update_analysis, 'value')
+        self.widgets["filter-cutoff"].param.watch(self.update_analysis, 'value')
+        self.widgets["wavelet-min-frequency"].param.watch(self.update_analysis, 'value')
+        self.widgets["wavelet-max-frequency"].param.watch(self.update_analysis, 'value')
+        self.widgets["wavelet-dj"].param.watch(self.update_analysis, 'value')
+        
         self.data = None
+        self.raw_data = None  # Store raw data before processing
         self.data_tabs = None
+        
+        # Try to load from cache first for faster startup
+        cache_key = "tfa_precache"
+        if cache_key in pn.state.cache:
+            try:
+                self.log("Loading from cache...")
+                cached = pn.state.cache[cache_key]
+                self.raw_data = cached['raw_data']
+                self.data = cached['data']
+                self.swarmpal_quicklook.object = cached['figure']
+                self.data_view.object = cached['data_view']
+                self.code_snippet.object = cached['code_snippet']
+                self.cli_command.object = cached['cli_command']
+                self.output_title.object = "# SwarmPAL TFA Quicklook"
+                self.log("Loaded from cache successfully", level="success")
+            except Exception as e:
+                self.log(f"Failed to load from cache: {e}", level="warning")
+                # Fall through to normal loading
+                self._load_initial_data()
+        else:
+            # Load data on startup and cache it
+            self._load_initial_data()
+    
+    def _load_initial_data(self):
+        """Load initial data and cache it for future sessions"""
+        try:
+            self.log("Starting TFA dashboard...")
+            self.update_input_data(None)
+            
+            # Cache the loaded data for faster startup next time
+            cache_key = "tfa_precache"
+            pn.state.cache[cache_key] = {
+                'raw_data': self.raw_data,
+                'data': self.data,
+                'figure': self.swarmpal_quicklook.object,
+                'data_view': self.data_view.object,
+                'code_snippet': self.code_snippet.object,
+                'cli_command': self.cli_command.object,
+            }
+            self.log("Dashboard initialized successfully", level="success")
+        except Exception as e:
+            self.log(f"Failed to load initial data: {e}", level="error")
+            import traceback
+            self.log(traceback.format_exc(), level="error")
 
     @property
     def sidebar(self):
         '''Panel UI definition for the sidebar.'''
         self.data_tabs = pn.Tabs(
-            ("VirES (remote", pn.Column(
-                pn.pane.Markdown("Select Duration"),
+            ("VirES", pn.Column(
                 self.widgets["start-end"],
                 pn.pane.Markdown("Select spacecraft"),
                 self.widgets["spacecraft"],
@@ -163,10 +248,17 @@ class TFA_GUI:
                  self.widgets["file-dropper"],
                  )),
         )
-        return pn.Column(
-            pn.pane.Markdown("## Data Parameters"),
+        
+        data_params_box = pn.Card(
             self.data_tabs,
-            pn.layout.Divider(),
+            self.widgets["button-fetch-data"],
+            title="Data Parameters",
+            collapsed=False,
+            collapsible=True,
+            styles={'background': '#f0f8ff', 'border': '2px solid #4682b4', 'border-radius': '5px'}
+        )
+        
+        process_params_box = pn.Column(
             pn.pane.Markdown("## Process Parameters"),
             pn.pane.Markdown("### Preprocess"),
             self.widgets['preprocess-active-component'],
@@ -184,17 +276,52 @@ class TFA_GUI:
             self.widgets['wavelet-min-frequency'],
             self.widgets['wavelet-max-frequency'],
             self.widgets['wavelet-dj'],
-            pn.layout.Divider(),
-            self.widgets["update-button"],
-            self.widgets["evaluate-button"],
+            styles={'background': '#fff8f0', 'border': '2px solid #ff8c42', 'border-radius': '5px', 'padding': '10px'}
         )
+        
+        return pn.Column(
+            data_params_box,
+            pn.layout.Divider(),
+            process_params_box,
+        )
+
+    def set_loading(self, loading=True):
+        """Show or hide loading spinner in the log button"""
+        self._is_loading = loading
+        if loading:
+            self.log_button.name = "⏳ Processing..."
+            self.log_button.button_type = "warning"
+        else:
+            self.log_button.name = "📋 View Logs"
+            self.log_button.button_type = "light"
+    
+    def log(self, message, level="info"):
+        """Add a log message to the log panel"""
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        
+        colors = {
+            "info": "#2c3e50",
+            "success": "#27ae60",
+            "warning": "#f39c12",
+            "error": "#e74c3c"
+        }
+        color = colors.get(level, colors["info"])
+        
+        # Escape HTML in message
+        import html
+        escaped_message = html.escape(str(message))
+        
+        new_entry = f'<div style="color: {color}; margin-bottom: 5px;"><strong>[{timestamp}]</strong> {escaped_message}</div>'
+        current_logs = self.log_messages.object or ""
+        self.log_messages.object = current_logs + new_entry
 
     @property
     def main(self):
         return pn.Column(
             self.output_title,
             pn.Tabs(
-                ("SwarmPal quicklook", self.swarmpal_quicklook),
+                ("Quicklook", pn.Column(self.swarmpal_quicklook, align='center')),
                 ("Data view", self.data_view),
                 ("SwarmPAL Python Code", self.code_snippet),
                 ("SwarmPAL CLI Command", self.cli_command),
@@ -245,6 +372,8 @@ class TFA_GUI:
         )]
 
     def _using_cdf_input(self):
+        if self.data_tabs is None:
+            return False
         return self.data_tabs.active == 1
 
     def _make_data_params(self):
@@ -288,49 +417,93 @@ class TFA_GUI:
             process_params=process_params,
         )
 
-    def update_data(self, event):
-        '''Downloads input data, applies processes and updates the main pane'''
+    def update_input_data(self, event):
+        '''Downloads input data and applies processes'''
 
         if self._using_cdf_input() and not self.widgets["file-dropper"].value:
             return
 
-        config = self.make_config()
-        self.data = swarmpal.fetch_data(config)
-        swarmpal.apply_processes(self.data, config['process_params'])
-        self.update_output_pane(event)
+        try:
+            self.set_loading(True)
+            self.log("Fetching input data...")
+            config = self.make_config()
+            self.raw_data = swarmpal.fetch_data(config)
+            # Make a copy for processing
+            import copy
+            self.data = copy.deepcopy(self.raw_data)
+            self.log("Applying processes...")
+            swarmpal.apply_processes(self.data, config['process_params'])
+            
+            # Display fetched data info
+            self.data_view.object = self.data._repr_html_()
+            self.code_snippet.object = self.get_vires_code()
+            self.log("Data fetched and processed successfully", level="success")
+        except Exception as e:
+            self.log(f"Error fetching data: {e}", level="error")
+            import traceback
+            self.log(traceback.format_exc(), level="error")
+            raise
+        finally:
+            self.set_loading(False)
+        
+        # Automatically update the analysis with the new data
+        self.update_analysis(None)
 
-    def update_output_pane(self, event, title="# SwarmPAL TFA Quicklook"):
-        '''Update the mane pane'''
+    def update_analysis(self, event, title="# SwarmPAL TFA Quicklook"):
+        '''Analyze data and update the output pane'''
 
-        self.output_title.object = title
-
-        if self._using_cdf_input() and not self.widgets["file-dropper"].value:
-            # TODO: ask user for a file
+        if self.raw_data is None:
+            self.output_title.object = "Please fetch data first"
+            self.log("No data available for analysis", level="warning")
             return
 
-        # Update code and CLI snippets
-        self.code_snippet.object = self.get_vires_code()
-        self.cli_command.object = self.get_cli()
+        try:
+            self.set_loading(True)
+            self.log("Running analysis with current parameters...")
+            # Re-apply processes with current parameters
+            import copy
+            config = self.make_config()
+            self.data = copy.deepcopy(self.raw_data)
+            swarmpal.apply_processes(self.data, config['process_params'])
 
-        if not self.data:
-            return
+            self.output_title.object = title
 
-        # Update the data view
-        self.data_view.object = self.data._repr_html_()
+            # Update code and CLI snippets
+            self.cli_command.object = self.get_cli()
+            self.code_snippet.object = self.get_vires_code()
 
-        if self._using_cdf_input(): # TypeError: No numeric data to plot. when working on CDF files
-            return
+            if not self.data:
+                return
 
-        # Plot the results
-        fig, _ = swarmpal.toolboxes.tfa.plotting.quicklook(
-            self.data,
-            tlims=(
-                self.widgets["start-end"].value[0].isoformat(),
-                self.widgets["start-end"].value[1].isoformat(),
-            ),
-            extra_x=('QDLat', 'MLT', 'Latitude'),
-        )
-        self.swarmpal_quicklook.object = fig
+            # Update the data view
+            self.data_view.object = self.data._repr_html_()
+
+            if self._using_cdf_input(): # TypeError: No numeric data to plot. when working on CDF files
+                self.log("Analysis complete (CDF mode)", level="success")
+                return
+
+            # Plot the results
+            self.log("Generating quicklook plot...")
+            fig, _ = swarmpal.toolboxes.tfa.plotting.quicklook(
+                self.data,
+                tlims=(
+                    self.widgets["start-end"].value[0].isoformat(),
+                    self.widgets["start-end"].value[1].isoformat(),
+                ),
+                extra_x=('QDLat', 'MLT', 'Latitude'),
+            )
+            # Reduce figure size to fit on screen
+            # fig.set_size_inches(12, 5)
+            fig.tight_layout()
+            self.swarmpal_quicklook.object = fig
+            self.log("Analysis complete", level="success")
+        except Exception as e:
+            self.log(f"Error during analysis: {e}", level="error")
+            import traceback
+            self.log(traceback.format_exc(), level="error")
+            raise
+        finally:
+            self.set_loading(False)
 
     @staticmethod
     def _empty_matplotlib_figure():
@@ -381,14 +554,113 @@ class TFA_GUI:
         return template.render(context)
 
 
+# Pre-populate cache at server startup for faster first load
+def _populate_tfa_cache():
+    """Pre-populate the TFA cache with default data"""
+    cache_key = "tfa_precache"
+    if cache_key not in pn.state.cache:
+        print("Starting TFA precache...")
+        try:
+            # Create default config with sensible defaults (matching widget defaults)
+            default_config = {
+                'data_params': [dict(
+                    provider="vires",
+                    collection="SW_OPER_MAGA_LR_1B",
+                    measurements=["B_NEC"],
+                    models=["Model='CHAOS-Core'+'CHAOS-Static'"],
+                    auxiliaries=["QDLat", "MLT"],
+                    start_time=dt.datetime(2026, 1, 1).isoformat(),
+                    end_time=dt.datetime(2026, 1, 2).isoformat(),
+                    pad_times=["03:00:00", "03:00:00"],
+                    server_url="https://vires.services/ows",
+                )],
+                'process_params': [
+                    dict(
+                        process_name="TFA_Preprocess",
+                        dataset="SW_OPER_MAGA_LR_1B",
+                        active_variable="B_NEC",
+                        active_component=2,
+                        sampling_rate=1.0,
+                        remove_model=False,
+                    ),
+                    dict(
+                        process_name="TFA_Clean",
+                        window_size=300,
+                        method='iqr',
+                        multiplier=0.5,
+                    ),
+                    dict(
+                        process_name="TFA_Filter",
+                        cutoff_frequency=0.02,
+                    ),
+                    dict(
+                        process_name="TFA_Wavelet",
+                        min_frequency=0.02,
+                        max_frequency=0.1,
+                        dj=0.1,
+                    ),
+                ]
+            }
+            
+            # Fetch and process data
+            raw_data = swarmpal.fetch_data(default_config)
+            import copy
+            data = copy.deepcopy(raw_data)
+            swarmpal.apply_processes(data, default_config['process_params'])
+            
+            # Generate quicklook plot
+            fig, _ = swarmpal.toolboxes.tfa.plotting.quicklook(
+                data,
+                tlims=(
+                    default_config['data_params'][0]['start_time'],
+                    default_config['data_params'][0]['end_time'],
+                ),
+                extra_x=('QDLat', 'MLT', 'Latitude'),
+            )
+            fig.tight_layout()
+            
+            # Store in cache
+            pn.state.cache[cache_key] = {
+                'raw_data': raw_data,
+                'data': data,
+                'figure': fig,
+                'data_view': data._repr_html_(),
+                'code_snippet': "# Code snippet will be generated on first use",
+                'cli_command': "# CLI command will be generated on first use",
+            }
+            print("TFA precache completed successfully.")
+        except Exception as e:
+            print(f"TFA precache failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+# Run precache at module load time
+_populate_tfa_cache()
+
 tfa_gui = TFA_GUI(widgets)
 
+# Create modal for logs
+log_modal = pn.Column(
+    pn.pane.Markdown("## Messages & Logs"),
+    tfa_gui.log_modal,
+)
+
 dashboard = pn.template.BootstrapTemplate(
-    header=HEADER,
+    header=pn.Row(
+        HEADER,
+        pn.Spacer(),
+        tfa_gui.log_button,
+        align='center'
+    ),
     title="SwarmPAL: TFA",
     sidebar=tfa_gui.sidebar,
     main=tfa_gui.main,
+    sidebar_width=380,
+    modal=log_modal,
 ).servable()
+
+# Wire up the log button to open the modal
+tfa_gui.log_button.on_click(lambda event: dashboard.open_modal())
 
 if __name__ == '__main__':
     dashboard.show()

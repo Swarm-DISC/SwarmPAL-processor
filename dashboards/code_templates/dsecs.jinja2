@@ -1,0 +1,52 @@
+import datetime as dt
+from swarmpal.io import create_paldata, PalDataItem
+from swarmpal.toolboxes import dsecs
+import matplotlib.pyplot as plt
+
+# Define data parameters for both spacecraft
+def data_params(spacecraft="A"):
+    return dict(
+        server_url="https://vires.services/ows",
+        collection=f"SW_OPER_MAG{spacecraft}_LR_1B",
+        measurements=["B_NEC"],
+        models=["Model = CHAOS"],
+        auxiliaries=["QDLat"],
+        start_time="{{ start_time }}",
+        end_time="{{ end_time }}",
+        options=dict(asynchronous=False, show_progress=False),
+    )
+
+# Fetch data for both Swarm-A and Swarm-C
+data = create_paldata(
+    PalDataItem.from_vires(**data_params("A")),
+    PalDataItem.from_vires(**data_params("C")),
+)
+
+print("Data fetched:")
+print(data)
+
+{% if preprocessed %}
+# Preprocessing: Add Apex coordinates
+p1 = dsecs.processes.Preprocess()
+p1(data)
+print("\nAfter preprocessing:")
+print(data)
+{% endif %}
+
+{% if analyzed %}
+# DSECS Analysis
+p2 = dsecs.processes.Analysis()
+p2(data)
+print("\nAfter DSECS analysis:")
+print(data.groups)
+
+# Plot the results
+from swarmpal.experimental import dsecs_plotting
+figs = dsecs_plotting.quicklook(data)
+
+# Save results to NetCDF for future use
+output_filename = "dsecs_results_{{ start_time[:10] }}.nc"
+data.to_netcdf(output_filename)
+print(f"\n💾 Results saved to: {output_filename}")
+print("   You can upload this file to the dashboard later for instant visualization!")
+{% endif %}

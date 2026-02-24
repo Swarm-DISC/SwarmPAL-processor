@@ -5,7 +5,6 @@ description = "Provides dashboards and 'processor mode' for SwarmPAL"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "apexpy",
     "hvplot>=0.11.2",
     "jupyterlab>=4.3.5",
     "jupytext>=1.16.7",
@@ -21,4 +20,27 @@ dependencies = [
 [tool.uv.sources]
 swarmpal = { git = "https://github.com/Swarm-DISC/SwarmPAL", rev = "staging"}
 swarmpal-mma = { git = "https://github.com/smithara/MMA-2E", rev = "33c619ae630c3a0c5e073d706eb8b9f27de1ae8d"}
-apexpy = { url = "https://github.com/smithara/apexpy/releases/download/v2.1.0-binaries/apexpy-2.1.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
+
+[dependency-groups]
+apexpy_wheels = [
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp310-cp310-macosx_15_0_arm64.whl ; python_version == '3.10' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp310-cp310-macosx_15_0_x86_64.whl ; python_version == '3.10' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; python_version == '3.10' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp310-cp310-win_amd64.whl ; python_version == '3.10' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp311-cp311-macosx_15_0_arm64.whl ; python_version == '3.11' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp311-cp311-macosx_15_0_x86_64.whl ; python_version == '3.11' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; python_version == '3.11' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp311-cp311-win_amd64.whl ; python_version == '3.11' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp312-cp312-macosx_15_0_arm64.whl ; python_version == '3.12' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp312-cp312-macosx_15_0_x86_64.whl ; python_version == '3.12' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; python_version == '3.12' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp312-cp312-win_amd64.whl ; python_version == '3.12' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp313-cp313-macosx_15_0_arm64.whl ; python_version == '3.13' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp313-cp313-macosx_15_0_x86_64.whl ; python_version == '3.13' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; python_version == '3.13' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp313-cp313-win_amd64.whl ; python_version == '3.13' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp314-cp314-macosx_15_0_arm64.whl ; python_version == '3.14' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp314-cp314-macosx_15_0_x86_64.whl ; python_version == '3.14' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; python_version == '3.14' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "apexpy @ https://github.com/smithara/apexpy/releases/download/v-2.1.0-binaries-v2/apexpy-2.1.0-cp314-cp314-win_amd64.whl ; python_version == '3.14' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+]

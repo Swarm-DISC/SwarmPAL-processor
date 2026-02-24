@@ -29,8 +29,8 @@ MMA_2E_CODE_TEMPLATE = "mma-2e.jinja2"
 start_of_today = dt.datetime.now().date()
 end_of_today = start_of_today + dt.timedelta(days=1)
 four_weeks_ago = end_of_today - dt.timedelta(days=28)
-default_start = dt.datetime(2024, 1, 1)
-default_end = dt.datetime(2024, 1, 7)
+default_start = dt.datetime(2026, 1, 1)
+default_end = dt.datetime(2026, 1, 2)
 
 widgets = {
     "spacecraft": pn.widgets.CheckBoxGroup(

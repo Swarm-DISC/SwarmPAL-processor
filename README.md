@@ -42,6 +42,12 @@ podman run --rm -it -p 5006:5006 --env-file .env ghcr.io/swarm-disc/swarmpal-pro
 
 ## Development
 
+### Quickstart to run dashboards
+
+`uvx nox`
+
+(see `noxfile.py` for what it does)
+
 ### Managing uv environment
 
 See <https://docs.astral.sh/uv/guides/projects/> for more information.
@@ -51,6 +57,8 @@ Adding dependencies (updates `pyproject.toml` and `uv.lock`):
 - Add specific version of swarmpal:  
   `uv add "swarmpal @ git+https://github.com/Swarm-DISC/SwarmPAL.git@c37bc7b"`
 - Use [uv sync](https://docs.astral.sh/uv/reference/cli/#uv-sync) to update the lock file
+- Update swarmpal (we pin it to "staging", so we need to get uv to get the latest version from that branch):
+  `uv lock --upgrade-package swarmpal`
 
 Install the venv (creates `.venv/` from the specification in `uv.lock`):  
 `uv sync --frozen`
@@ -58,10 +66,8 @@ Install the venv (creates `.venv/` from the specification in `uv.lock`):
 Run jupyterlab for development:  
 `uv run jupyter-lab`
 
-Test the dashboards:  
-`uv run panel serve dashboards/*`
-
-(or activate the venv with `source source .venv/bin/activate`)
+Run the dashboards:  
+`nox -s dashboards`
 
 ### Run the processor
 

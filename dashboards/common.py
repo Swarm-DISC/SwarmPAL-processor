@@ -9,9 +9,10 @@ import panel as pn
 
 HEADER = pn.pane.Markdown(
     """
-    *This dashboard is in active development and is provided here for testing purposes.*
+    *This dashboard is in active development and is provided here for testing purposes  
+    Contact: ashley.smith@ed.ac.uk*
 
-    [..to the other dashboards](../) &nbsp;&nbsp;&nbsp;&nbsp;  [SwarmPAL Docs](https://swarmpal.readthedocs.io)
+    [..to the other dashboards](../) &nbsp;&nbsp;&nbsp;&nbsp;  [SwarmPAL Docs](https://swarmpal.readthedocs.io) &nbsp;&nbsp;&nbsp;&nbsp;  [<img src="https://github.githubassets.com/favicons/favicon.svg" width="16" height="16" alt="GitHub"/> SwarmPAL](https://github.com/Swarm-DISC/SwarmPAL) &nbsp;&nbsp;&nbsp;&nbsp;  [<img src="https://github.githubassets.com/favicons/favicon.svg" width="16" height="16" alt="GitHub"/> SwarmPAL-processor](https://github.com/Swarm-DISC/SwarmPAL-processor)
     """,
     styles={
         "color": "white",
